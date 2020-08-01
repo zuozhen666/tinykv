@@ -33,27 +33,94 @@ func NewServer(storage storage.Storage) *Server {
 	}
 }
 
+
 // The below functions are Server's gRPC API (implements TinyKvServer).
 
 // Raw API.
 func (server *Server) RawGet(_ context.Context, req *kvrpcpb.RawGetRequest) (*kvrpcpb.RawGetResponse, error) {
 	// Your Code Here (1).
-	return nil, nil
+	// Get storagereader interface by Reader method.
+	storagereader, err := server.storage.Reader(req.Context)
+	if err != nil {
+		return &kvrpcpb.RawGetResponse{Error: err.Error()}, err
+	}
+	// Fetch the current value for a key for the specified CF.
+	value, err := storagereader.GetCF(req.Cf, req.Key)
+	if err != nil {
+		return &kvrpcpb.RawGetResponse{Error: err.Error()}, err
+	}
+	if value == nil {
+		return &kvrpcpb.RawGetResponse {
+			Value: value,
+			NotFound: true,
+		}, nil
+	} else {
+		return &kvrpcpb.RawGetResponse {
+			Value: value,
+			NotFound: false,
+		}, nil
+	}
 }
 
 func (server *Server) RawPut(_ context.Context, req *kvrpcpb.RawPutRequest) (*kvrpcpb.RawPutResponse, error) {
 	// Your Code Here (1).
-	return nil, nil
+	// Initialize a parameter which is a interface slice.
+	batch := []storage.Modify{storage.Modify{
+		Data: storage.Put{
+			Key:   req.Key,
+			Value: req.Value,
+			Cf:    req.Cf,
+		},
+	}}
+	err := server.storage.Write(req.Context, batch)
+	if err != nil {
+		return &kvrpcpb.RawPutResponse{Error: err.Error()}, err
+	}
+	return &kvrpcpb.RawPutResponse{}, nil
 }
 
 func (server *Server) RawDelete(_ context.Context, req *kvrpcpb.RawDeleteRequest) (*kvrpcpb.RawDeleteResponse, error) {
 	// Your Code Here (1).
-	return nil, nil
+	// Initialize a parameter which is a interface slice.
+	batch := []storage.Modify{storage.Modify{
+		Data: storage.Delete{
+			Key: req.Key,
+			Cf:  req.Cf,
+		},
+	}}
+	err := server.storage.Write(req.Context, batch)
+	if err != nil {
+		return &kvrpcpb.RawDeleteResponse{Error: err.Error()}, err
+	}
+	return &kvrpcpb.RawDeleteResponse{}, nil
 }
 
 func (server *Server) RawScan(_ context.Context, req *kvrpcpb.RawScanRequest) (*kvrpcpb.RawScanResponse, error) {
 	// Your Code Here (1).
-	return nil, nil
+	if req.Limit == 0 {
+		return &kvrpcpb.RawScanResponse{Kvs: nil}, nil
+	}
+	// Get storagereader interface by Reader method.
+	storagereader, err := server.storage.Reader(req.Context)
+	if err != nil {
+		return &kvrpcpb.RawScanResponse{Error: err.Error()}, err
+	}
+	iter := storagereader.IterCF(req.Cf)
+	iter.Seek(req.StartKey)
+	var pairs []*kvrpcpb.KvPair
+	for n := req.Limit; iter.Valid(); iter.Next() {
+		item := iter.Item()
+		val, _ := item.ValueCopy(nil)
+		pairs = append(pairs, &kvrpcpb.KvPair{
+			Key: item.KeyCopy(nil),
+			Value: val,
+		})
+		n--
+		if n == 0 {
+			break
+		}
+	}
+	return &kvrpcpb.RawScanResponse{Kvs: pairs}, nil
 }
 
 // Raft commands (tinykv <-> tinykv)
