@@ -149,17 +149,6 @@ func (rn *RawNode) Ready() Ready {
 	// Your Code Here (2A).
 	rn.ready.Entries = rn.Raft.RaftLog.unstableEntries()
 	rn.ready.CommittedEntries = rn.Raft.RaftLog.nextEnts()
-	rn.ready.Messages = rn.Raft.msgs
-	rn.Raft.msgs = make([]pb.Message, 0)
-	/*rn.ready.HardState = pb.HardState {
-		Term:	rn.Raft.Term,
-		Vote:	rn.Raft.Vote,
-		Commit:	rn.Raft.RaftLog.committed,
-	}
-	rn.ready.SoftState = &SoftState {
-		Lead:	   rn.Raft.Lead,
-		RaftState: rn.Raft.State,
-	}*/
 	return *(rn.ready)
 }
 
