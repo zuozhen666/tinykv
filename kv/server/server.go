@@ -44,6 +44,7 @@ func (server *Server) RawGet(_ context.Context, req *kvrpcpb.RawGetRequest) (*kv
 	if err != nil {
 		return &kvrpcpb.RawGetResponse{Error: err.Error()}, err
 	}
+	defer storagereader.Close()
 	// Fetch the current value for a key for the specified CF.
 	value, err := storagereader.GetCF(req.Cf, req.Key)
 	if err != nil {
@@ -51,13 +52,13 @@ func (server *Server) RawGet(_ context.Context, req *kvrpcpb.RawGetRequest) (*kv
 	}
 	if value == nil {
 		return &kvrpcpb.RawGetResponse {
-			Value: value,
-			NotFound: true,
+			Value: 		value,
+			NotFound: 	true,
 		}, nil
 	} else {
 		return &kvrpcpb.RawGetResponse {
-			Value: value,
-			NotFound: false,
+			Value: 		value,
+			NotFound: 	false,
 		}, nil
 	}
 }
@@ -65,13 +66,14 @@ func (server *Server) RawGet(_ context.Context, req *kvrpcpb.RawGetRequest) (*kv
 func (server *Server) RawPut(_ context.Context, req *kvrpcpb.RawPutRequest) (*kvrpcpb.RawPutResponse, error) {
 	// Your Code Here (1).
 	// Initialize a parameter which is a interface slice.
-	batch := []storage.Modify{storage.Modify{
-		Data: storage.Put{
-			Key:   req.Key,
-			Value: req.Value,
-			Cf:    req.Cf,
-		},
-	}}
+	batch := []storage.Modify{
+		storage.Modify{
+			Data: storage.Put{
+				Cf:    req.Cf,
+				Key:   req.Key,
+				Value: req.Value,
+			},
+		}}
 	err := server.storage.Write(req.Context, batch)
 	if err != nil {
 		return &kvrpcpb.RawPutResponse{Error: err.Error()}, err
@@ -82,12 +84,13 @@ func (server *Server) RawPut(_ context.Context, req *kvrpcpb.RawPutRequest) (*kv
 func (server *Server) RawDelete(_ context.Context, req *kvrpcpb.RawDeleteRequest) (*kvrpcpb.RawDeleteResponse, error) {
 	// Your Code Here (1).
 	// Initialize a parameter which is a interface slice.
-	batch := []storage.Modify{storage.Modify{
-		Data: storage.Delete{
-			Key: req.Key,
-			Cf:  req.Cf,
-		},
-	}}
+	batch := []storage.Modify{
+		storage.Modify{
+			Data: storage.Delete{
+				Cf:  req.Cf,
+				Key: req.Key,
+			},
+		}}
 	err := server.storage.Write(req.Context, batch)
 	if err != nil {
 		return &kvrpcpb.RawDeleteResponse{Error: err.Error()}, err
@@ -105,15 +108,17 @@ func (server *Server) RawScan(_ context.Context, req *kvrpcpb.RawScanRequest) (*
 	if err != nil {
 		return &kvrpcpb.RawScanResponse{Error: err.Error()}, err
 	}
+	defer storagereader.Close()
 	iter := storagereader.IterCF(req.Cf)
+	defer iter.Close()
 	iter.Seek(req.StartKey)
-	var pairs []*kvrpcpb.KvPair
+	pairs := make([]*kvrpcpb.KvPair, 0)
 	for n := req.Limit; iter.Valid(); iter.Next() {
 		item := iter.Item()
 		val, _ := item.ValueCopy(nil)
 		pairs = append(pairs, &kvrpcpb.KvPair{
-			Key: item.KeyCopy(nil),
-			Value: val,
+			Key: 	item.KeyCopy(nil),
+			Value: 	val,
 		})
 		n--
 		if n == 0 {
